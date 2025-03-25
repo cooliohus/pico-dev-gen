@@ -16,12 +16,19 @@ i2c_dev = I2C(1,scl=Pin(27),sda=Pin(26),freq=200000)  # start I2C on I2C1 (GPIO 
 i2c_addr = [hex(ii) for ii in i2c_dev.scan()] # get I2C address in hex format
 if i2c_addr==[]:
     print('No I2C Display Found') 
+    have_oled = False
     sys.exit() # exit routine if no dev found
 else:
     print("I2C Address      : {}".format(i2c_addr[0])) # I2C device address
     print("I2C Configuration: {}".format(i2c_dev)) # print I2C params
+    oled = SSD1306_I2C(pix_res_x, pix_res_y, i2c_dev) # oled controller
+    have_oled = True
+    #oled.text("  Dev:",5,5)
+    #oled.text("Audio:",5,25)
+    #oled.text("by K3JSE",5,45)
+    #oled.show() # show the new text
 
-oled = SSD1306_I2C(pix_res_x, pix_res_y, i2c_dev) # oled controller
+
 #########################################################
 
 # Virtual machine registers - default assignments are
@@ -113,8 +120,8 @@ def init_deviation(carrier, deviation):
     global src_data
     print("initialize Sine Table (deviation)")
     # adjust for TXCO error on AD9850 board
-    txco_calib = 16500
-    base_freq = int(carrier / (125_000_000 / pow(2, 32))) + txco_calib
+    ad9850_txco_calib = 16500
+    base_freq = int(carrier / (125_000_000 / pow(2, 32))) + ad9850_txco_calib
     dev1000 = deviation / 1000
     for j in range(32):
         for i in range(4):
@@ -181,10 +188,9 @@ def start_modulation(carrier, audio, deviation):
 
     print("Starting State Machine")
     sm_freq.active(1)
-    sm_freq.restart()  # kick-start the state machine (if necessary)
-    sm_freq.put(1)      # kick-start the state machine (if necessary)
-    print("Starting dma_0")
-    dma_0.active(1)
+    sm_freq.put(1)               # kick-start the state machine
+    #print("Starting dma_0")
+    #dma_0.active(1)              # dma_0 will chain to dma_1
 
 def update_audio(new_audio):
     SM0_CLKDIV = 0x50200000 + 0xC8
@@ -194,11 +200,15 @@ def update_audio(new_audio):
 def update_deviation(carrier, new_dev):
     init_deviation(carrier, new_dev)
 
+def update_display(audio,dev, freq):
+    if have_oled:
+        oled.fill(0)
+        oled.text("Audio: "+audio+"Hz",5,5)
+        oled.text("  Dev: "+ dev+"Hz",5,25)
+        oled.text("f: "+ freq+"Hz",5,45)
+        oled.show() # show the new text
 
-oled.text("Deviation",5,5)
-oled.text("   Generator",5,25)
-oled.text("by K3JSE",5,45)
-oled.show() # show the new text and image
+update_display(str(regs[1]),str(regs[2]), str(regs[0]))
 
 # Create a polling object instance
 poll_obj = select.poll()
@@ -264,6 +274,7 @@ try:
                         print("updating modulation")
                         update_deviation(regs[base], regs[dev])
                         update_audio(regs[audio])
+                        update_display(str(regs[audio]),str(regs[dev]), str(regs[base]))
                     except:
                         print("Parameters not numeric")
                 elif cmd == "f":
@@ -285,6 +296,7 @@ try:
                             )
                             update_audio(audio)
                             update_deviation(regs[base], dev)
+                            update_display(str(int(audio)),str(dev), str(regs[base]))
                     except:
                         print("Deviation not numeric")
                 elif cmd == "l":
@@ -294,6 +306,9 @@ try:
                     print("Updating audio and deviation settings")
                     update_audio(regs[1])
                     update_deviation(regs[0], regs[2])
+                    update_display(str(regs[1]),str(regs[2]), str(regs[0]))
+                    
+
                 elif cmd == "h":
                     print("Halting state machine SM0")
                     sm_freq.active(0)
@@ -303,6 +318,7 @@ try:
                     sm_freq.restart()
                 else:
                     print("Unknown Command:", cmd)
+                
 
 except KeyboardInterrupt:
     print("caught exception")
