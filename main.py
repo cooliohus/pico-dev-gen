@@ -1,3 +1,39 @@
+#####################################################################################
+# FM Deviation generator - Raspberry Pi Pico										#
+# 	and AD9580 DDS module with SSD1306 OLED											#
+#																					#
+# Pico:		Pin# / Function ... AD9850:	Pin # / Function ... SSD1306:	Function	#
+# 			36		3V3					1,20	Vcc						Vcc			#
+#			13,18,28	GND				6,11	Gnd						Gnd			#
+#			16		GP12				2		W_CLK								#
+#			17		GP13				3		FU_UD								#
+#			19		GP14				5		RESET								#
+#			20		GP15				4		SER_DATA							#
+#			31		GP26(SDA1)											SDA			#
+#			32		GP27(SCL1)											SCL			#
+#										18		10K pull-up to 3V3					#
+#										19		10K pull-up to 3V3					#
+#										10		Sine wave out to SMA				#
+#																					#
+#	Designed by: K3JSE - Andy														#
+#####################################################################################
+
+#################################################################################
+#																				#
+# Commands:																		#
+#	l<cr>								List register contents					#
+#	r,<r#>,<data><cr>					Load register r# with data				#
+#			where (r#):	0 = carrier freq.	1 = audio freq.	2 = deviation freq.	#
+#	u<cr><cr>							Update AD9850 with updated registers	#
+#	m,<carrier>,<audio>,<deviation><cr>	Load registers with data values			#
+#	b,<carrier>,<audio>,<deviation><cr>	Load registers with Bessel null values	#
+#	h<cr>								Halt state machine						#
+#	s<cr>								Start state machine						#
+#																				#
+#################################################################################
+
+
+
 import select
 import sys, framebuf
 from machine import Pin, mem32, freq, I2C
@@ -17,7 +53,7 @@ i2c_addr = [hex(ii) for ii in i2c_dev.scan()] # get I2C address in hex format
 if i2c_addr==[]:
     print('No I2C Display Found') 
     have_oled = False
-    sys.exit() # exit routine if no dev found
+    #sys.exit() # exit routine if no dev found
 else:
     print("I2C Address      : {}".format(i2c_addr[0])) # I2C device address
     print("I2C Configuration: {}".format(i2c_dev)) # print I2C params
@@ -152,7 +188,7 @@ def start_modulation(carrier, audio, deviation):
     init_deviation(carrier, deviation)
     #print("end init deviation")
     # Instantiate a state machine with the AD9850 serial load program, at 125 mHz
-    #   GP12 clock
+    #   GP12 W_CLK
     #   GP13 Update pin
     #   GP14 reset
     #   GP15 data pin
@@ -189,8 +225,8 @@ def start_modulation(carrier, audio, deviation):
     print("Starting State Machine")
     sm_freq.active(1)
     sm_freq.put(1)               # kick-start the state machine
-    #print("Starting dma_0")
-    #dma_0.active(1)              # dma_0 will chain to dma_1
+    print("Starting dma_0")
+    dma_0.active(1)              # dma_0 will chain to dma_1
 
 def update_audio(new_audio):
     SM0_CLKDIV = 0x50200000 + 0xC8
@@ -203,9 +239,13 @@ def update_deviation(carrier, new_dev):
 def update_display(audio,dev, freq):
     if have_oled:
         oled.fill(0)
-        oled.text("Audio: "+audio+"Hz",5,5)
-        oled.text("  Dev: "+ dev+"Hz",5,25)
-        oled.text("f: "+ freq+"Hz",5,45)
+        oled.text("Audio: "+audio+" Hz.",5,5)
+        oled.text("  Dev: "+ dev+" Hz.",5,25)
+        oled.text("f: "+ freq+" Hz.",5,45)
+        oled.hline(0,0,127,1)
+        oled.hline(0,63,127,1)
+        oled.vline(0,0,63,1)
+        oled.vline(127,0,63,1)
         oled.show() # show the new text
 
 update_display(str(regs[1]),str(regs[2]), str(regs[0]))
