@@ -201,7 +201,7 @@ def get_key():
     ch = newkeyMatrix[row][col]
     #print("row: ",row,"  col: ",col,"  colx: ",colx,"  keypressed: ",ch)
     #print("keypressed: ",ch)
-    # add the new character to the keypad input buffer
+    # add th enew character to the keypad input buffer
     key_buff += ch
     # if the new character is # or * then signal the outer loop to take action
     if (ch == "#") or (ch == "*"):
