@@ -26,7 +26,7 @@
 # FM modulated signal.  Each set of sine waves comprisinmg the modulated signal is
 # composed of 64 samples which the pio block outputs to the AD9850 to create
 # one full modulated audio cycle.  The sine wave table is centered around a
-# carrier frequency and the 64 samples vary + / - arround that carrier frequency.
+# carrier frequency and the 64 samples vary + / - around that carrier frequency.
 # The amount of variance determines the deviatiion.  E.G. varying the modulated 
 # sine wave frequency by +/- 2500Hz will create an FM deviation of 2500Hz.
 #
@@ -42,7 +42,7 @@
 # Note: never feed the output directly into the receivers antenna jack without 80dB or more
 # of attenuation.  Even though the 145MHz image has a low amplitude, the 20MHz fundamental
 # could be "deadly"
-
+#
 # The filtered output with suitable attenuation may be connected to a transverter to create
 # a potentially cleaner VHF signal.  Note that a transverter will likely provide low pass
 # filtering so the unfiltered output may also be adequate.
@@ -52,7 +52,7 @@
 # instructions from the RS232 port instead of memory which allows "programs"
 # to run on a separate PC / Laptop.  The default operation when powered on is
 # a 1500Hz audio tone, 2500Hz deviation with a 19,600,00Hz carrier / center
-# frequency.
+# frequency.  The VM can be driven through the PICO serial port or a 16 key keypad
 #
 # Default register usage is
 #   r0 - carrier frequency in hertz
@@ -60,7 +60,7 @@
 #   r2 - modulated deviation in hertz
 #
 #
-# Commands:
+# VM Commands:
 #	l<cr>						List register contents
 #	r,<r#>,<data><cr>			Load register r# with data (see defaults)
 #                                 e.g. r,0,19600000
@@ -78,7 +78,7 @@
 #	h<cr>						Halt state machine
 #	s<cr>						Start state machine
 #
-# Example program
+# Example program (from serial port)
 #
 # Alternate between two modulated signals then create a Bessel null signal
 # Commands are sent from a PC / Laptop via the serial port with appropriate delays.  Users
@@ -102,7 +102,29 @@
 #     u<cr>               # update modulated signal
 #                         # return to "default" using r0, r1, and r2
 #
-######################################################################################
+# Keypad Commands
+# ---------------
+#
+# Most keypad commands begin with a command key, parameter, then the # key as a terminator
+#
+#   A - change audio frequency
+#   D - change deviation
+#   C - Change "carrier" frequency
+#   B - set audio frequency for Bessel null at current deviation setting
+#   * - reset to defaults
+#   # - toggle modulation on / off
+#
+# Keypad Examples
+#
+#   A1500#      set audio modulation to 1500 Hertz
+#   D2500#      set deviation to 2500 Hertz
+#   C20000000#  set carrier frequency to 20,000,000 Hertz
+#   B#          set audio frequency to create a Bessel null at curent deviation
+#                  e.g. 1039.5 Hertz if deviation is 2500 Hertz (default)
+#   *           reset dto efaults C=19,600,000 A=1500 D=2500
+#   #           toggle modulation on / off
+#
+#####################################################################################
 
 
 import select
@@ -228,7 +250,7 @@ def keypad_getkey():
     push(noblock)            # a key was pressed, push the ISR into the RX FIFO
     irq(0)                   # generate "key available" interrupt
 
-    # debounce routine, wait for all keys up. This also inhibits key roll-over and key repeat which
+    # debounce routine, wait for all keys up. The side effect is key roll-over and key repeat are inhibited... which
     # is probably a good thing :-)
     set(y,0)                 # use y register for constant 0
     set(pins,0b1111)[31]     # set ALL row lines high add 31 clk delays to extend debounce time
