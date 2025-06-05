@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"python.languageServer": "Pylance",
+		"micropico.manualComDevice": "/dev/ttyACM1",
+		"micropico.autoConnect": false
+	}
+}
