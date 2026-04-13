@@ -351,10 +351,7 @@ sines1000_64 = [
 # with the desired deviation and carrier offset
 #src_data = bytearray(64 * 4)
 
-sine_a_active = True
-sine_a = array.array('L', (0 for _ in range(64)))
-sine_b = array.array('L', (0 for _ in range(64)))
-sine_wave = sine_a
+new_src_data = array.array('L', (0 for _ in range(64)))
 
 #print(len(src_data))
 #print(type(src_data))
@@ -363,13 +360,11 @@ sine_wave = sine_a
 # DMA interrupt function to restart each DMA buffer after chaining to the next one
 # dma0 and dma1 ping / pong for continuity
 def dma_handler(dm):
-    #dm.read = new_src_data
-    dm.read = sine_wave
+    dm.read = new_src_data
 
 # Initialize the DMA buffer with values from the sine table scaled by required deviation (in Hz)
-def init_deviation(carrier, deviation,buff):
-   # global signal_a,signal_b, new_src_data
-    #global sine_a
+def init_deviation(carrier, deviation):
+    global src_data, new_src_data
     #print("initialize Sine Table (deviation)")
     # adjust for TXCO error on AD9850 board
     #ad9850_txco_calib = -2800
@@ -385,8 +380,8 @@ def init_deviation(carrier, deviation,buff):
     #        src_data[(j + 32) * 4 + i] = ((base_freq - int(sines1000_64[j] * dev1000)) >> i * 8) & 0xFF
     #print("init")
     for j in range(32):
-        buff[j] =    int(base_freq + int(sines1000_64[j] * dev1000))
-        buff[j+32] = int(base_freq - int(sines1000_64[j] * dev1000))
+        new_src_data[j] =    int(base_freq + int(sines1000_64[j] * dev1000))
+        new_src_data[j+32] = int(base_freq - int(sines1000_64[j] * dev1000))
         
     #print("done init")
     #for i in range(4):
@@ -417,10 +412,7 @@ def start_modulation(carrier, audio, deviation):
 
     pio_freq = int(PIO_CYCLE_COUNT * audio)
     
-    #init_deviation(carrier, deviation,sine_wave)
-    init_deviation(carrier, deviation,sine_a)
-    sine_wave = sine_a
-    
+    init_deviation(carrier, deviation)
     # Instantiate a state machine with the AD9850 serial load program, at 125 mHz
     #   GP12 W_CLK
     #   GP13 Update pin
@@ -452,9 +444,9 @@ def start_modulation(carrier, audio, deviation):
         chain_to=dma_0.channel
     )
 
-    dma_0.config(read=sine_wave, write=sm_freq, count=64, ctrl=c_0, trigger=False)
+    dma_0.config(read=new_src_data, write=sm_freq, count=64, ctrl=c_0, trigger=False)
 
-    dma_1.config(read=sine_wave, write=sm_freq, count=64, ctrl=c_1, trigger=False)
+    dma_1.config(read=new_src_data, write=sm_freq, count=64, ctrl=c_1, trigger=False)
 
     print("Starting State Machine")
     sm_freq.active(1)
@@ -468,14 +460,7 @@ def update_audio(new_audio):
 
 
 def update_deviation(carrier, new_dev):
-    global sine_wave,sine_a,sine_b,sine_a_active
-    if sine_a_active:
-        init_deviation(carrier, new_dev,sine_b)
-        sine_wave = sine_b
-    else:
-        init_deviation(carrier, new_dev,sine_a)
-        sine_wave = sine_a
-    sine_a_active = not sine_a_active
+    init_deviation(carrier, new_dev)
 
 def update_display(audio,dev, freq):
     if have_oled:

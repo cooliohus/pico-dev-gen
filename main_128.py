@@ -24,9 +24,9 @@
 #
 # The application uses an AD9850 DDS chip module to output sine waves that create an
 # FM modulated signal.  Each set of sine waves comprisinmg the modulated signal is
-# composed of 64 samples which the pio block outputs to the AD9850 to create
+# composed of 128 samples which the pio block outputs to the AD9850 to create
 # one full modulated audio cycle.  The sine wave table is centered around a
-# carrier frequency and the 64 samples vary + / - around that carrier frequency.
+# carrier frequency and the 128 samples vary + / - around that carrier frequency.
 # The amount of variance determines the deviatiion.  E.G. varying the modulated 
 # sine wave frequency by +/- 2500Hz will create an FM deviation of 2500Hz.
 #
@@ -129,12 +129,12 @@
 
 import select
 import sys, framebuf
-from machine import Pin, mem8, mem32, freq, I2C
+from machine import Pin, mem32, freq, I2C
 from ssd1306 import SSD1306_I2C
-import array, time
+import time
 import rp2
 import onewire
-import uctypes
+# import uctypes
 
 ###############################################################################
 # Initialize the SSD1306 OLED display if present.
@@ -288,6 +288,7 @@ sm_getkey.active(1)
     fifo_join=rp2.PIO.JOIN_TX,
 )
 
+# Write 32 bit frequency word then 8 bit phase word
 def ad9850():
     wrap_target()
     pull(block).side(0b00)
@@ -347,65 +348,52 @@ sines1000_64 = [
     24296, 21798, 19089, 16197, 13149, 9974, 6703, 3368,
 ]
 
+sines1000_128 = [
+    0,1686,3368,5042,6703,8349,9974,11575,
+    13149,14691,16197,17664,19089,20468,21798,23075,
+    24296,25459,26560,27598,28569,29471,30303,31061,
+    31744,32351,32880,33330,33700,33988,34194,34318,
+    34360,34318,34194,33988,33700,33330,32880,32351,
+    31744,31061,30303,29471,28569,27598,26560,25459,
+    24296,23075,21798,20468,19089,17664,16197,14691,
+    13149,11575,9974,8349,6703,5042,3368,1686
+]
+
 # DMA buffer containg AD9850 frequency word values for sine wave
 # with the desired deviation and carrier offset
-#src_data = bytearray(64 * 4)
-
-sine_a_active = True
-sine_a = array.array('L', (0 for _ in range(64)))
-sine_b = array.array('L', (0 for _ in range(64)))
-sine_wave = sine_a
-
-#print(len(src_data))
-#print(type(src_data))
-#sys.exit()
+src_data = bytearray(128 * 4)
 
 # DMA interrupt function to restart each DMA buffer after chaining to the next one
 # dma0 and dma1 ping / pong for continuity
 def dma_handler(dm):
-    #dm.read = new_src_data
-    dm.read = sine_wave
+    dm.read = src_data
 
 # Initialize the DMA buffer with values from the sine table scaled by required deviation (in Hz)
-def init_deviation(carrier, deviation,buff):
-   # global signal_a,signal_b, new_src_data
-    #global sine_a
+def init_deviation(carrier, deviation):
+    global src_data
     #print("initialize Sine Table (deviation)")
     # adjust for TXCO error on AD9850 board
     #ad9850_txco_calib = -2800
-    ad9850_txco_calib = 150
+    ad9850_txco_calib = 20
     base_freq = int(carrier / ((125_000_000 + ad9850_txco_calib) / pow(2, 32)))
-    #print("base freq:",base_freq)
     dev1000 = deviation / 1000
-    #print("dev 1000:",dev1000)
+    for j in range(64):
+        for i in range(4):
+            src_data[j * 4 + i] = (
+                (base_freq + int(sines1000_128[j] * dev1000)) >> i * 8
+            ) & 0xFF
+            src_data[(j + 32) * 4 + i] = (
+                (base_freq - int(sines1000_128[j] * dev1000)) >> i * 8
+            ) & 0xFF
 
-    #for j in range(32):
-    #    for i in range(4):
-    #        src_data[j * 4 + i] = ((base_freq + int(sines1000_64[j] * dev1000)) >> i * 8) & 0xFF
-    #        src_data[(j + 32) * 4 + i] = ((base_freq - int(sines1000_64[j] * dev1000)) >> i * 8) & 0xFF
-    #print("init")
-    for j in range(32):
-        buff[j] =    int(base_freq + int(sines1000_64[j] * dev1000))
-        buff[j+32] = int(base_freq - int(sines1000_64[j] * dev1000))
-        
-    #print("done init")
-    #for i in range(4):
-    #    print(hex(mem32[uctypes.addressof(new_src_data)+32*4+i*4]))
-    #    print(hex(mem32[uctypes.addressof(src_data)+32*4+i*4]))
-        
-        
-    #    print ("new_src_data",i,new_src_data[i]-base_freq)
-    #print("buffer_info",uctypes.addressof(new_src_data),src_data_addr)
-    #sys.exit()
-
-
-
-# This value is the number of pio clocks in a complete 64 AD9850 frequency word cycle
+# This value is the number of pio clocks in a complete 128 AD9850 frequency word cycle
 # The value is scaled by the desired audio frequency and used to calculate the pio clock speed
-PIO_CYCLE_COUNT = 5504
+#PIO_CYCLE_COUNT =  2752
+#PIO_CYCLE_COUNT = 5504
+PIO_CYCLE_COUNT = 11008
 
 def start_modulation(carrier, audio, deviation):
-    global src_data, new_src_data   # DMA buffer
+    global src_data   # DMA buffer
     global sm_freq    # AD9850 state machine
     global dma_0      # DMA 0 block, ping / pongs with dma_1
     global dma_1      # DMA 1 block
@@ -417,10 +405,7 @@ def start_modulation(carrier, audio, deviation):
 
     pio_freq = int(PIO_CYCLE_COUNT * audio)
     
-    #init_deviation(carrier, deviation,sine_wave)
-    init_deviation(carrier, deviation,sine_a)
-    sine_wave = sine_a
-    
+    init_deviation(carrier, deviation)
     # Instantiate a state machine with the AD9850 serial load program, at 125 mHz
     #   GP12 W_CLK
     #   GP13 Update pin
@@ -452,9 +437,9 @@ def start_modulation(carrier, audio, deviation):
         chain_to=dma_0.channel
     )
 
-    dma_0.config(read=sine_wave, write=sm_freq, count=64, ctrl=c_0, trigger=False)
+    dma_0.config(read=src_data, write=sm_freq, count=128, ctrl=c_0, trigger=False)
 
-    dma_1.config(read=sine_wave, write=sm_freq, count=64, ctrl=c_1, trigger=False)
+    dma_1.config(read=src_data, write=sm_freq, count=128, ctrl=c_1, trigger=False)
 
     print("Starting State Machine")
     sm_freq.active(1)
@@ -468,14 +453,7 @@ def update_audio(new_audio):
 
 
 def update_deviation(carrier, new_dev):
-    global sine_wave,sine_a,sine_b,sine_a_active
-    if sine_a_active:
-        init_deviation(carrier, new_dev,sine_b)
-        sine_wave = sine_b
-    else:
-        init_deviation(carrier, new_dev,sine_a)
-        sine_wave = sine_a
-    sine_a_active = not sine_a_active
+    init_deviation(carrier, new_dev)
 
 def update_display(audio,dev, freq):
     if have_oled:
