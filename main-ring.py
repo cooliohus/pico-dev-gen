@@ -252,7 +252,9 @@ def keypad_getkey():
 
     # debounce routine, wait for all keys up. The side effect is key roll-over and key repeat are inhibited... which
     # is probably a good thing :-)
-    set(y,0)                 # use y register for constant 0
+    set(y,0)[31]             # use y register for constant 0
+    set(y,0)[31]             # and add some delay
+    set(y,0)[31]             #
     set(pins,0b1111)[31]     # set ALL row lines high add 31 clk delays to extend debounce time
     label("debounce")
     mov(isr,y)[31]           # clear ISR register

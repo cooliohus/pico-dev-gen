@@ -1,3 +1,21 @@
+#
+#    K3JSE Pico based deviation signal generator
+#    Copyright (C) 2026  W. Andy Cooper, K3JSE
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#    The author can be contacted by email at k3jse@coolioh.com#
+#
 #####################################################################################
 # FM Deviation generator - Raspberry Pi Pico										#
 # 	and AD9580 DDS module with SSD1306 OLED											#
@@ -133,8 +151,11 @@ from machine import Pin, mem8, mem32, freq, I2C
 from ssd1306 import SSD1306_I2C
 import array, time
 import rp2
-import onewire
-import uctypes
+#import onewire
+#import uctypes
+
+version = "2.0.0  09/22/2026"
+
 
 ###############################################################################
 # Initialize the SSD1306 OLED display if present.
@@ -464,6 +485,7 @@ def start_modulation(carrier, audio, deviation):
 
 def update_audio(new_audio):
     SM0_CLKDIV = 0x50200000 + 0xC8
+    #print("new audio",new_audio)
     mem32[SM0_CLKDIV] = sm_div_calc(int(PIO_CYCLE_COUNT * new_audio))
 
 
@@ -610,11 +632,18 @@ try:
             #if len(key_buff) > 1:
             #    param = int(key_buff[1:-1])
             if key_buff[0] == "A":
-                cmd = "r,1," + key_buff[1:-1]
-                print("send cmd: ",cmd)
-                print("send cmd: ","u")
-                vm(cmd)
-                vm('u')
+                try:
+                    new_audio = key_buff[1:-1]
+                    test = int(new_audio)
+                    if (test <0) or (test > 10_000):
+                        raise(ValueError)
+                    cmd = "r,1," + key_buff[1:-1]
+                    print("send cmd: ",cmd)
+                    print("send cmd: ","u")
+                    vm(cmd)
+                    vm('u')
+                except:
+                    print("Value Error: ",new_audio)
             elif key_buff[0] == "B":
                 #print("entering bessel")
                 #print("regs[2]: ",regs[2])
@@ -624,17 +653,32 @@ try:
                 vm(cmd)
                 vm('u')
             elif key_buff[0] == "C":
-                cmd = "r,0," + key_buff[1:-1]
-                print("cmd: ",cmd)
-                print("cmd: ","u")
-                vm(cmd)
-                vm('u')
+                try:
+                    new_freq = key_buff[1:-1]
+                    test = int(new_freq)
+                    if (test < 0) or (test > 25_000):
+                        raise(ValueError)
+                    cmd = "r,0," + new_freq
+                    print("cmd: ",cmd)
+                    print("cmd: ","u")
+                    vm(cmd)
+                    vm('u')
+                except:
+                    print("Value Error: ",new_freq)
+                
             elif key_buff[0] == "D":
-                cmd = "r,2," + key_buff[1:-1]
-                print("cmd: ",cmd)
-                print("cmd: ","u")
-                vm(cmd)
-                vm('u')
+                try:
+                    new_dev = key_buff[1:-1]
+                    test = int(new_dev)
+                    if (test < 0) or (test > 10_000):
+                        raise(ValueError)
+                    cmd = "r,2," + new_dev
+                    print("cmd: ",cmd)
+                    print("cmd: ","u")
+                    vm(cmd)
+                    vm('u')
+                except:
+                    print("Value Error: ",new_dev)
             elif key_buff[0] == "#":
                 # toggle state mahine
                 if sm_freq.active():
@@ -647,7 +691,7 @@ try:
             elif key_buff[0] == "*":
                 # reset to default
                 vm('r,0,19600000')
-                vm('r,1,1500')
+                vm('r,1,1000')
                 vm('r,2,2500')
                 vm('u')
             key_buff = ""
